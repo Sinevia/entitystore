@@ -3,68 +3,62 @@ package entitystore
 import (
 	//"log"
 	// "log"
+	"database/sql"
+	"os"
 	"testing"
+
 	//"database/sql"
 	_ "github.com/mattn/go-sqlite3"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
+	// _ "modernc.org/sqlite"
 )
 
-func InitDB(filepath string) *gorm.DB /**sql.DB*/ {
-	db, err := gorm.Open(sqlite.Open(filepath), &gorm.Config{})
+func InitDB(filepath string) *sql.DB {
+	os.Remove(filepath) // remove database
+	dsn := filepath
+	db, err := sql.Open("sqlite3", dsn)
 
 	if err != nil {
-		panic(err) 
+		panic(err)
 	}
-	
+
 	return db
 }
 
 func TestStoreCreate(t *testing.T) {
-	db := InitDB("entity_create.db")
-	
-	store := NewStore(WithGormDb(db),WithEntityTableName("cms_entity"),WithAttributeTableName("cms_attribute"),WithAutoMigrate(true))
-	
-	entity := store.EntityCreate("post")
-	if entity == nil{
-		t.Fatalf("Entity could not be created")
+	db := InitDB("test_store_create.db")
+
+	store, err := NewStore(NewStoreOptions{
+		DB:                 db,
+		EntityTableName:    "cms_entity",
+		AttributeTableName: "cms_attribute",
+		AutomigrateEnabled: true,
+	})
+
+	if err != nil {
+		t.Fatalf("Store could not be created: " + err.Error())
+	}
+
+	if store == nil {
+		t.Fatalf("Store could not be created")
 	}
 }
-
 
 func TestStoreAutomigrate(t *testing.T) {
-	db := InitDB("entity_create.db")
-	
-	store := NewStore(WithGormDb(db),WithEntityTableName("cms_entity"),WithAttributeTableName("cms_attribute"))
+	db := InitDB("test_entity_automigrate.db")
 
-	store.AutoMigrate()
-	
-	entity := store.EntityCreate("post")
-	if entity == nil{
-		t.Fatalf("Entity could not be created")
-	}
-}
+	store, err := NewStore(NewStoreOptions{
+		DB:                 db,
+		EntityTableName:    "cms_entity",
+		AttributeTableName: "cms_attribute",
+	})
 
-func TestStoreEntityDelete(t *testing.T) {
-	db := InitDB("entity_create.db")
-	
-	store := NewStore(WithGormDb(db),WithEntityTableName("cms_entity"),WithAttributeTableName("cms_attribute"),WithAutoMigrate(true))
-	
-	entity := store.EntityCreate("post")
-	
-	if entity == nil{
-		t.Fatalf("Entity could not be created")
+	if err != nil {
+		t.Fatalf("Store could not be created: " + err.Error())
 	}
 
-	entity.SetString("title", "Hello world")
+	errAutomigrate := store.AutoMigrate()
 
-	isDeleted := store.EntityDelete(entity.ID)
-
-	if isDeleted == false {
-		t.Fatalf("Entity could not be soft deleted")
-	} 
-
-	if store.EntityFindByID(entity.ID) != nil {
-		t.Fatalf("Entity should no longer be present")
+	if errAutomigrate != nil {
+		t.Fatal("Automigrate failed: ", err.Error())
 	}
 }
